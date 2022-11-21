@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 import { MongoClient } from "mongodb";
 import joi from "joi";
 import dayjs from "dayjs";
-import { v4 as uuid } from "uuid";
+import { v4 as uuidV4 } from "uuid";
 import bcrypt from "bcrypt";
 dotenv.config();
 
@@ -20,7 +20,7 @@ const userSchema = joi.object({
   password: joi.string().required(),
 });
 
-const token = uuid();
+const token = uuidV4();
 
 const mongoClient = new MongoClient(process.env.MONGO_URI);
 let db;
@@ -29,7 +29,7 @@ await mongoClient.connect();
 db = mongoClient.db("my-wallet");
 
 const usersCollection = db.collection("users");
-const messagesCollection = db.collection("messages");
+const recordsColletcion = db.collection("records");
 const sessionsCollection = db.collection("sessions");
 
 const app = express();
@@ -50,7 +50,7 @@ app.post("/sign-up", async (req, res) => {
 
   try {
     const { email } = req.body;
-    const emailValidation = await usersCollection.findOne({ email: email });
+    const emailValidation = await usersCollection.findOne({ email });
 
     if (emailValidation) {
       res.sendStatus(409);
@@ -71,7 +71,7 @@ app.post("/sign-up", async (req, res) => {
 app.post("/sign-in", async (req, res) => {
   const { email, password } = req.body;
 
-  const validation = userSchema.validate(user, { abortEarly: false });
+  const validation = userSchema.validate({email, password}, { abortEarly: false });
   if (validation.error) {
     const errors = validation.error.details.map((detail) => detail.message);
     res.status(422).send(errors);
@@ -79,7 +79,7 @@ app.post("/sign-in", async (req, res) => {
   }
 
   try {
-    const token = V4();
+    const token = uuidV4();
 
     const { email } = req.body;
     const userValidation = await usersCollection.findOne({ email: email });
@@ -88,14 +88,102 @@ app.post("/sign-in", async (req, res) => {
       return;
     }
     const passwordOk = bcrypt.compareSync(password, userValidation.password);
-    if (!password) {
+    if (!passwordOk) {
       return res.sendStatus(401);
     }
 
-    await usersCollection.insertOne({token, userId: userValidation._id});
+    await sessionsCollection.insertOne({token, userId: userValidation._id});
     res.send({token});
   } catch (error) {
     console.log(error);
+    res.sendStatus(500);
+  }
+});
+
+// POST NEW INPUT
+app.post("/new-input", async (req, res) => {
+  const { date, description, value, status} = req.body;
+  const { authorization } = req.headers;
+
+  const token = authorization?.replace("Bearer ", "");
+
+  if (!token) {
+    return res.sendStatus(401);
+  }
+
+  try {
+    const session = await sessionsCollection.findOne({ token });
+    const user = await usersCollection.findOne({ _id: session?.userId });
+    console.log(token)
+
+    if (!user) {
+      return res.sendStatus(401);
+    }
+
+    await recordsColletcion.insertOne({
+      date,
+      description,
+      value,
+      status,
+      userId: user._id,
+    });
+
+    res.sendStatus(201);
+  } catch (err) {
+    console.log(err);
+    res.sendStatus(500);
+  }
+});
+
+// POST NEW OUTPUT
+app.post("/new-output", async (req, res) => {
+  const { date, description, value, status} = req.body;
+  const { Authorization } = req.headers;
+
+  const token = Authorization?.replace("Bearer ", "");
+
+  if (!token) {
+    return res.sendStatus(401);
+  }
+
+  try {
+    const session = await sessionsCollection.findOne({ token });
+    const user = await usersCollection.findOne({ _id: session?.userId });
+
+    if (!user) {
+      return res.sendStatus(401);
+    }
+
+    await recordsColletcion.insertOne({
+      date,
+      description,
+      value,
+      status,
+      userId: user._id,
+    });
+
+    res.sendStatus(201);
+  } catch (err) {
+    console.log(err);
+    res.sendStatus(500);
+  }
+});
+
+// GET RECORDS
+app.get("/records", async (req, res) => {
+  const { authorization } = req.headers;
+
+  const token = authorization?.replace("Bearer ", "");
+
+  if (!token) {
+    return res.sendStatus(401);
+  }
+
+  try {
+    const posts = await recordsColletcion.find().toArray();
+    res.send(posts);
+  } catch (err) {
+    console.log(err);
     res.sendStatus(500);
   }
 });
