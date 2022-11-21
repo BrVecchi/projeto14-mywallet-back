@@ -5,6 +5,7 @@ const sessionsCollection = db.collection("sessions");
 
 export const getRecords = async (req, res) => {
   const token = req.token;
+  console.log(token)
   try {
     const session = await sessionsCollection.findOne({ token });
     const userId = session.userId;

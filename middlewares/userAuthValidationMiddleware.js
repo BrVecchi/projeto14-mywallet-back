@@ -10,5 +10,6 @@ export const userAuthMiddleware = async (req, res, next) => {
     res.sendStatus(401);
     return;
   }
+  req.userValidation = userValidation
   next();
 };
