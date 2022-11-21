@@ -20,7 +20,12 @@ const userSchema = joi.object({
   password: joi.string().required(),
 });
 
-const token = uuidV4();
+const newPutsSchema = joi.object({
+  date: joi.string().required(),
+  description: joi.string().required(),
+  value: joi.number().required(),
+  status: joi.string().required()
+})
 
 const mongoClient = new MongoClient(process.env.MONGO_URI);
 let db;
@@ -105,6 +110,13 @@ app.post("/new-input", async (req, res) => {
   const { date, description, value, status} = req.body;
   const { authorization } = req.headers;
 
+  const validation = newPutsSchema.validate(req.body, { abortEarly: false });
+  if (validation.error) {
+    const errors = validation.error.details.map((detail) => detail.message);
+    res.status(422).send(errors);
+    return;
+  }
+
   const token = authorization?.replace("Bearer ", "");
 
   if (!token) {
@@ -112,9 +124,10 @@ app.post("/new-input", async (req, res) => {
   }
 
   try {
-    const session = await sessionsCollection.findOne({ token });
+    const session = await sessionsCollection.findOne({ token: token });
     const user = await usersCollection.findOne({ _id: session?.userId });
-    console.log(token)
+    console.log(session)
+    console.log(typeof(token))
 
     if (!user) {
       return res.sendStatus(401);
@@ -138,15 +151,23 @@ app.post("/new-input", async (req, res) => {
 // POST NEW OUTPUT
 app.post("/new-output", async (req, res) => {
   const { date, description, value, status} = req.body;
-  const { Authorization } = req.headers;
+  const { authorization } = req.headers;
 
-  const token = Authorization?.replace("Bearer ", "");
+  const validation = newPutsSchema.validate(req.body, { abortEarly: false });
+  if (validation.error) {
+    const errors = validation.error.details.map((detail) => detail.message);
+    res.status(422).send(errors);
+    return;
+  }
+
+  const token = authorization?.replace("Bearer ", "");
 
   if (!token) {
     return res.sendStatus(401);
   }
 
   try {
+  console.log(token)
     const session = await sessionsCollection.findOne({ token });
     const user = await usersCollection.findOne({ _id: session?.userId });
 
