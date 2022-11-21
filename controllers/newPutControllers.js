@@ -1,33 +1,12 @@
 import db from "../src/db.js";
-import joi from "joi";
 
 const usersCollection = db.collection("users");
 const recordsColletcion = db.collection("records");
 const sessionsCollection = db.collection("sessions");
 
-const newPutsSchema = joi.object({
-    date: joi.string().required(),
-    description: joi.string().required(),
-    value: joi.number().required(),
-    status: joi.string().required(),
-  });
-
 export const newInput = async (req, res) => {
   const { date, description, value, status } = req.body;
-  const { authorization } = req.headers;
-
-  const validation = newPutsSchema.validate(req.body, { abortEarly: false });
-  if (validation.error) {
-    const errors = validation.error.details.map((detail) => detail.message);
-    res.status(422).send(errors);
-    return;
-  }
-
-  const token = authorization?.replace("Bearer ", "");
-
-  if (!token) {
-    return res.sendStatus(409);
-  }
+  const token = req.token;
 
   try {
     const session = await sessionsCollection.findOne({ token });
@@ -54,20 +33,7 @@ export const newInput = async (req, res) => {
 
 export const newOutput = async (req, res) => {
   const { date, description, value, status } = req.body;
-  const { authorization } = req.headers;
-
-  const validation = newPutsSchema.validate(req.body, { abortEarly: false });
-  if (validation.error) {
-    const errors = validation.error.details.map((detail) => detail.message);
-    res.status(422).send(errors);
-    return;
-  }
-
-  const token = authorization?.replace("Bearer ", "");
-
-  if (!token) {
-    return res.sendStatus(401);
-  }
+  const token = req.token;
 
   try {
     const session = await sessionsCollection.findOne({ token });

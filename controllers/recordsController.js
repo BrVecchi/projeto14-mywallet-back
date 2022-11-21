@@ -4,14 +4,7 @@ const recordsColletcion = db.collection("records");
 const sessionsCollection = db.collection("sessions");
 
 export const getRecords = async (req, res) => {
-  const { authorization } = req.headers;
-
-  const token = authorization?.replace("Bearer ", "");
-
-  if (!token) {
-    return res.sendStatus(401);
-  }
-
+  const token = req.token;
   try {
     const session = await sessionsCollection.findOne({ token });
     const userId = session.userId;
