@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { MongoClient } from "mongodb";
+import { MongoClient, ObjectId } from "mongodb";
 import joi from "joi";
 import dayjs from "dayjs";
 import { v4 as uuidV4 } from "uuid";
@@ -24,8 +24,8 @@ const newPutsSchema = joi.object({
   date: joi.string().required(),
   description: joi.string().required(),
   value: joi.number().required(),
-  status: joi.string().required()
-})
+  status: joi.string().required(),
+});
 
 const mongoClient = new MongoClient(process.env.MONGO_URI);
 let db;
@@ -76,7 +76,10 @@ app.post("/sign-up", async (req, res) => {
 app.post("/sign-in", async (req, res) => {
   const { email, password } = req.body;
 
-  const validation = userSchema.validate({email, password}, { abortEarly: false });
+  const validation = userSchema.validate(
+    { email, password },
+    { abortEarly: false }
+  );
   if (validation.error) {
     const errors = validation.error.details.map((detail) => detail.message);
     res.status(422).send(errors);
@@ -87,7 +90,7 @@ app.post("/sign-in", async (req, res) => {
     const token = uuidV4();
 
     const { email } = req.body;
-    const userValidation = await usersCollection.findOne({ email: email });
+    const userValidation = await usersCollection.findOne({ email });
     if (!userValidation) {
       res.sendStatus(401);
       return;
@@ -97,8 +100,12 @@ app.post("/sign-in", async (req, res) => {
       return res.sendStatus(401);
     }
 
-    await sessionsCollection.insertOne({token, userId: userValidation._id});
-    res.send({token});
+    const result = await sessionsCollection.insertOne({
+      token,
+      userId: userValidation._id,
+      name: userValidation.name,
+    });
+    res.send({ token, name: userValidation.name });
   } catch (error) {
     console.log(error);
     res.sendStatus(500);
@@ -107,7 +114,7 @@ app.post("/sign-in", async (req, res) => {
 
 // POST NEW INPUT
 app.post("/new-input", async (req, res) => {
-  const { date, description, value, status} = req.body;
+  const { date, description, value, status } = req.body;
   const { authorization } = req.headers;
 
   const validation = newPutsSchema.validate(req.body, { abortEarly: false });
@@ -120,15 +127,13 @@ app.post("/new-input", async (req, res) => {
   const token = authorization?.replace("Bearer ", "");
 
   if (!token) {
-    return res.sendStatus(401);
+    return res.sendStatus(409);
   }
 
   try {
-    const session = await sessionsCollection.findOne({ token: token });
+    const session = await sessionsCollection.findOne({ token });
     const user = await usersCollection.findOne({ _id: session?.userId });
-    console.log(session)
-    console.log(typeof(token))
-
+    console.log(session);
     if (!user) {
       return res.sendStatus(401);
     }
@@ -150,7 +155,7 @@ app.post("/new-input", async (req, res) => {
 
 // POST NEW OUTPUT
 app.post("/new-output", async (req, res) => {
-  const { date, description, value, status} = req.body;
+  const { date, description, value, status } = req.body;
   const { authorization } = req.headers;
 
   const validation = newPutsSchema.validate(req.body, { abortEarly: false });
@@ -167,7 +172,6 @@ app.post("/new-output", async (req, res) => {
   }
 
   try {
-  console.log(token)
     const session = await sessionsCollection.findOne({ token });
     const user = await usersCollection.findOne({ _id: session?.userId });
 
@@ -201,8 +205,10 @@ app.get("/records", async (req, res) => {
   }
 
   try {
-    const posts = await recordsColletcion.find().toArray();
-    res.send(posts);
+    const session = await sessionsCollection.findOne({ token });
+    const userId = session.userId;
+    const records = await recordsColletcion.find({userId}).toArray();
+    res.send(records);
   } catch (err) {
     console.log(err);
     res.sendStatus(500);
